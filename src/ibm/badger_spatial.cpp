@@ -1,5 +1,5 @@
-// Cooperative breeding in variable environments
-// Bram Kuijper 
+// Disease modeling in populations of badgers - spatial model
+// Bram Kuijper, Maria Wellbelove
 // 2019
 //
 #include <iostream>
@@ -47,23 +47,26 @@ int max_number_inhabitants = 10;
 // define a cell in the grid
 struct GridCell {
 
-    // make a list of the inhabitants
-    Individual inhabitants_L[max_number_inhabitants]; // latent infected
-    Individual inhabitants_I[max_number_inhabitants]; // infectious
-    Individual inhabitants_S[max_number_inhabitants]; // susceptible
+    // latents, infecteds, and susceptible individuals
+    // each list consists of three age classes
+    Individual inhabitants_L[3][max_number_inhabitants]; // latent infected
+    Individual inhabitants_I[3][max_number_inhabitants]; // infectious
+    Individual inhabitants_S[3][max_number_inhabitants]; // susceptible
    
     // number of individuals in each category
-    int number_of_inhabitants_L; // latent number
-    int number_of_inhabitants_I; // infectious
-    int number_of_inhabitants_S; // susceptible
-
-
+    int NL[3]; // latent number
+    int NI[3]; // infectious
+    int NS[3]; // susceptible
 };
+
+
+// define the actual population of grid cells
+GridCell Population[grid_width][grid_height];
+
 
 struct Individual {
     
     int infected_status 
-
 }
 
 // function or subroutine for intergroup transmission
@@ -85,7 +88,17 @@ void deaths()
 
 void reproduce()
 {
+    // go through columns of the grid
+    for (int column_i = 0; column_i < grid_width; ++column_i)
+    {
+        // 
+        for (int row_j = 0; row_j < grid_height; ++row_j)
+        { 
+            Population[column_i][row_j].
+        }
+    }
 
+    // i does not exist anymore
 }
 
 // the key part of the code
