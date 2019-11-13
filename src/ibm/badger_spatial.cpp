@@ -2,6 +2,9 @@
 // Bram Kuijper, Maria Wellbelove
 // 2019
 //
+// roughly after the model by 
+// White & Harris 1995 Phil Trans B
+//
 #include <iostream>
 #include <cstdlib>
 #include <fstream>
@@ -34,6 +37,7 @@ int seed = get_nanoseconds();
 mt19937 rng_r{static_cast<long unsigned int>(seed)};
 uniform_real_distribution<> uniform(0.0,1.0);
 
+
 // parameters & variables:
 
 // number of individuals in population
@@ -43,20 +47,33 @@ int grid_height = 12;
 // maximum number of inhabitants in a patch
 int max_number_inhabitants = 10;
 
+enum Sex {
+    Female = 0,
+    Male = 1
+};
+
+enum Age {
+    Cub = 0,
+    Yearling = 1,
+    Adult = 2,
+};
+
+enum State {
+    Susceptible = 0,
+    Latent = 1,
+    Infectious = 2
+};
 
 // define a cell in the grid
 struct GridCell {
 
-    // latents, infecteds, and susceptible individuals
-    // each list consists of three age classes
-    Individual inhabitants_L[3][max_number_inhabitants]; // latent infected
-    Individual inhabitants_I[3][max_number_inhabitants]; // infectious
-    Individual inhabitants_S[3][max_number_inhabitants]; // susceptible
+    // inhabitants in each patch
+    // (2 Sexes) x (3 Age Classes) x (3 Infectious States) x (max N individuals)
+    Individual inhabitants[2][3][3][max_number_inhabitants]; // latent infected
    
     // number of individuals in each category
-    int NL[3]; // latent number
-    int NI[3]; // infectious
-    int NS[3]; // susceptible
+    // (2 Sexes) x (3 Age Classes) x (3 Infectious States) 
+    int N[2][3][3]; // latent number
 };
 
 
@@ -81,25 +98,128 @@ void dispersal()
 
 }
 
-void deaths()
+void mortality()
 {
+    int Ndead, Nind, dead_individual;
 
-}
-
-void reproduce()
-{
-    // go through columns of the grid
     for (int column_i = 0; column_i < grid_width; ++column_i)
     {
-        // 
         for (int row_j = 0; row_j < grid_height; ++row_j)
-        { 
-            Population[column_i][row_j].
+        {
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                {
+                    for (int age_i = 1; age_i < 3; ++age_i)
+                    {
+                        Nind = Population[column_i][row_j].N[sex_i][inf_state_i][age_i];
+
+                        // the expected number of individuals which will die given 
+                        // a mortality rate of x
+                        binomial_distribution<int> binom_mort(Nind, mortality_rate);
+
+                        n_dead = binom_mort(rng_r);
+
+                        for (int i = 0; i < n_dead; ++i)
+                        {
+                            uniform_int_distribution<> dead_sampler(0, ndead - 1);
+                            dead_individual = dead_sampler(rng_r);
+
+                            // delete this individual
+                            Population[column_i][row_j].N[sex_i][inf_state_i][age_i][
+                                dead_individual
+                            ] = Population[column_i][row_j].N[sex_i][inf_state_i][age_i][n_dead - 1];
+                            
+                            --i;
+                            --n_dead;
+                        } // for (int i = 0; i < n_dead; ++i)
+                    } // for (int age_i = 1; age_i < 3; ++age_i)
+
+                    // now perform mortality on cubs
+                }
+            }
         }
     }
+} // end mortality()
 
-    // i does not exist anymore
-}
+
+// the reproduction function
+void reproduce(int const time)
+{
+    // go through columns of the grid
+    // and make cubs
+    //
+    // at the same time, cubs from previous year become yearlings
+    //
+
+    // auxiliary variable counting females in the local patch
+    int n_females_total = 0;
+    for (int column_i = 0; column_i < grid_width; ++column_i)
+    {
+        for (int row_j = 0; row_j < grid_height; ++row_j)
+        {
+            n_females_total = 0; 
+
+            // sum over total number of females
+            for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+            {
+                for (int age_i = 1; age_i < 3; ++age_i)
+                {
+                    n_females_total += Population[column_i][width_i].N[Female][inf_state_i][age_i];
+                }
+            }
+
+            // first, for all sexes, states and ages,
+            // move cubs to yearlings, yearlings to adults
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                {
+                    // loop over the last two different ages
+                    // but in reverse fashion, so that first the adults are
+                    // supplemented with yearlings
+                    //
+                    // then yearlings with cubs
+                    for (int age = 2; age >= 1; --age)
+                    {
+
+
+                        nyoung = Population[column_i][width_i].N[sex_i][age-1][inf_state_i];
+                        nold = Population[column_i][width_i].N[sex_i][age][inf_state_i];
+
+                        // bounds checking
+                        assert(nyoung >= 0);
+                        assert(nyoung <= max_number_inhabitants);
+
+                        assert(nold + nyoung >= 0);
+                        assert(nold + nyoung <= max_number_inhabitants);
+
+                        for (int young_i = 0; young_i < nyoung; ++young_i)
+                        {
+                            // copy individual from age - 1 to class age
+                            Population[column_i][width_i].inhabitants[sex_i][age][inf_state_i][
+                                Population[column_i][width_i].N[sex_i][age][inf_state_i]++
+                            ] = Population[column_i][width_i].inhabitants[sex_i][age-1][inf_state_i][young_i];
+                        }
+
+                        // all individuals from age-1 copied to age
+                        // hence set counter of all age-1 individuals to 0
+                        Population[column_i][width_i].N[sex_i][age-1][inf_state_i] = 0;
+                               
+                        // bounds checking again (trust nothing)
+                        assert(Population[column_i][width_i].N[sex_i][age][inf_state_i] <= 
+                                max_number_inhabitants);
+
+                    } // end for int age
+                } // end for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+            } // end for (int sex_i = 0; sex_i < 2; ++sex_i)
+
+            // now reproduce
+            ncubs = 
+
+        }// end for (int row_j = 0; row_j < grid_height; ++row_j)
+    } // end for (int column_i = 0; column_i < grid_width; ++column_i)
+} // end  void reproduce(int const time)
 
 // the key part of the code
 // accepting command line arguments

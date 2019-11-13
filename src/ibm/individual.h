@@ -4,10 +4,8 @@
 class Individual
 {
     public:
-        // diploid loci for helping in the two envts
-        double h[2][2];
-        // diploid loci for dispersal in the two envts
-        double d[2][2];
+
+        int t_birth = 0;
 
     Individual();
 
