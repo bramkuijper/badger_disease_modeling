@@ -64,12 +64,19 @@ enum State {
     Infectious = 2
 };
 
+// dispersal probability per year for females and males respectively
+double dispersal[2] = { 0.02,0.06 };
+
 // define a cell in the grid
 struct GridCell {
 
     // inhabitants in each patch
     // (2 Sexes) x (3 Age Classes) x (3 Infectious States) x (max N individuals)
     Individual inhabitants[2][3][3][max_number_inhabitants]; // latent infected
+    
+    // inhabitants in each patch
+    // (2 Sexes) x (3 Age Classes) x (3 Infectious States) x (max N individuals)
+    Individual immigrants[2][3][3][max_number_inhabitants]; // latent infected
    
     // number of individuals in each category
     // (2 Sexes) x (3 Age Classes) x (3 Infectious States) 
@@ -99,6 +106,13 @@ void dispersal()
     {
         for (int row_j = 0; row_j < grid_height; ++row_j)
         {
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                {
+                    for (int age_i = 0; age_i < 3; ++age_i)
+                    {
+            
 
 }
 
