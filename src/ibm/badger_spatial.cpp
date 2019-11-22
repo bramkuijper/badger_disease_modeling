@@ -95,17 +95,38 @@ void intergroup_transmission()
 
 void dispersal()
 {
+    for (int column_i = 0; column_i < grid_width; ++column_i)
+    {
+        for (int row_j = 0; row_j < grid_height; ++row_j)
+        {
 
 }
 
 void mortality()
 {
-    int Ndead, Nind, dead_individual;
-
     for (int column_i = 0; column_i < grid_width; ++column_i)
     {
         for (int row_j = 0; row_j < grid_height; ++row_j)
         {
+            // first calculate number of individuals for the mortality rate
+            int Nindtot = 0;
+            int NadF = 0;
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                {
+                    for (int age_i = 0; age_i < 3; ++age_i)
+                    {
+                        Nindtot += Population[column_i][row_j].N[sex_i][inf_state_i][age_i];
+
+                        if (age_i > 1 && sex_i == Female)
+                        {
+                            NadF += Population[column_i][row_j].N[sex_i][inf_state_i][age_i];
+                        }
+                    }
+                }
+            }
+
             for (int sex_i = 0; sex_i < 2; ++sex_i)
             {
                 for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
@@ -113,29 +134,51 @@ void mortality()
                     for (int age_i = 1; age_i < 3; ++age_i)
                     {
                         Nind = Population[column_i][row_j].N[sex_i][inf_state_i][age_i];
+                        
 
-                        // the expected number of individuals which will die given 
-                        // a mortality rate of x
-                        binomial_distribution<int> binom_mort(Nind, mortality_rate);
+                        mort_prob = mortality_rate;
+                        
+                        // now perform mortality on cubs
+                        // more complicated
+                        //
+                        // 1. if there are no adult females in Jan - June 
+                        // cub mortality rate = 90%
+                        // 2. if group size = 2 * carrying capacity
+                        // cub mortality is 70%
+                        // 3. semiquadritic function on top of this all
 
-                        n_dead = binom_mort(rng_r);
-
-                        for (int i = 0; i < n_dead; ++i)
+                        if (age_i == 0)
                         {
-                            uniform_int_distribution<> dead_sampler(0, ndead - 1);
-                            dead_individual = dead_sampler(rng_r);
+                            mort_prob = mortality_rate;
 
-                            // delete this individual
-                            Population[column_i][row_j].N[sex_i][inf_state_i][age_i][
-                                dead_individual
-                            ] = Population[column_i][row_j].N[sex_i][inf_state_i][age_i][n_dead - 1];
+                            if (NadF == 0)
+                            {
+                                mort_prob = mortality_rate_cubs_alone;
+                            }
+                            else if (Nindtot >= 2 * K)
+                            {
+                                mort_prob = mortality_rate_cubs_highK;
+                            }
+                        }
+
+                        for (int individual_i = 0; individual_i < Nind: ++individual_i)
+                        {
+                            // individual is sampled as one that dies
+                            //
+                            // death in yearlings and beyond according to fixed mort rate
+                            if (uniform(rng_r) < mort_prob)
+                            {
+                                // delete this individual
+                                Population[column_i][row_j][sex_i].inhabitants[
+                                    inf_state_i][age_i][individual_i] = 
+                                Population[column_i][row_j][sex_i].inhabitants[
+                                    inf_state_i][age_i][Nind - 1];
                             
-                            --i;
-                            --n_dead;
+                            --individual_i;
+                            --Nind;
+                            }
                         } // for (int i = 0; i < n_dead; ++i)
                     } // for (int age_i = 1; age_i < 3; ++age_i)
-
-                    // now perform mortality on cubs
                 }
             }
         }
