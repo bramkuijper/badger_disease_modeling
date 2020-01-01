@@ -80,7 +80,10 @@ struct GridCell {
    
     // number of individuals in each category
     // (2 Sexes) x (3 Age Classes) x (3 Infectious States) 
-    int N[2][3][3]; // latent number
+    int N[2][3][3]; // 
+
+    // number of immigrants
+    int Nimm[2][3][3]; 
 };
 
 
@@ -112,9 +115,39 @@ void dispersal()
                 {
                     for (int age_i = 0; age_i < 3; ++age_i)
                     {
-            
+                        Nind = Population[column_i][row_j].N[sex_i][inf_state_i][age_i];
 
-}
+                        for (int individual_i = 0; individual_i < Nind; ++individual_i)
+                        {
+                            // see whether individual disperses or not
+                            if (uniform(rng_r) < dispersal[sex_i])
+                            {
+                                Population[column_i][row_j][sex_i].inhabitants[
+                                    inf_state_i][age_i][individual_i] = 
+
+                                // directions of movement can be 
+                                // 0 (north)
+                                // 1 (east)
+                                // 2 (south)
+                                // 3 (west)
+                                // draw random number to indicate this
+
+                                Population[column_i][row_j][sex_i].immigrants
+
+                                // delete this individual
+                                Population[column_i][row_j][sex_i].inhabitants[
+                                    inf_state_i][age_i][individual_i] = 
+                                Population[column_i][row_j][sex_i].inhabitants[
+                                    inf_state_i][age_i][Nind - 1];
+
+                            }
+                    }
+                }
+            }
+        }
+    }
+} // end dispersal function
+       
 
 void mortality()
 {
@@ -145,7 +178,7 @@ void mortality()
             {
                 for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
                 {
-                    for (int age_i = 1; age_i < 3; ++age_i)
+                    for (int age_i = 0; age_i < 3; ++age_i)
                     {
                         Nind = Population[column_i][row_j].N[sex_i][inf_state_i][age_i];
                         
