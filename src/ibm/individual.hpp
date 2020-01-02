@@ -4,16 +4,12 @@
 class Individual
 {
     public:
-
-        int t_birth = 0;
+        double v; // virulence
 
     Individual();
 
     Individual(
-        double const hval1
-        ,double const hval2
-        ,double const dval1
-        ,double const dval2
+        double const vval
     );
     
     Individual(Individual const &other);
