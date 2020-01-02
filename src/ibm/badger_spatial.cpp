@@ -653,7 +653,6 @@ void reproduce()
                 // random_male <= n_infected_males + n_susceptible_males (5 < 3 + 4; 
                 // note cumulative count): stop & choose random susceptible male
 
-                exit(1);
                 for (int infection_status_sample_i = 0; 
                         infection_status_sample_i < 3; 
                         ++infection_status_sample_i)
