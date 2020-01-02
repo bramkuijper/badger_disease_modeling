@@ -272,8 +272,7 @@ void reproduce(int const time)
                     // then yearlings with cubs
                     for (int age = 2; age >= 1; --age)
                     {
-
-
+                        // get the number of young and old individuals
                         nyoung = Population[column_i][width_i].N[sex_i][age-1][inf_state_i];
                         nold = Population[column_i][width_i].N[sex_i][age][inf_state_i];
 
