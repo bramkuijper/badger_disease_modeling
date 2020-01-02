@@ -292,9 +292,7 @@ void dispersal()
                                 --n_current_class;
                                 --individual_i;
 
-                                assert(n_current_class >= 0);
-                                assert(individual_i >= 0);
-                                assert(individual_i < n_current_class);
+                                assert(individual_i <= n_current_class);
                             } // end if if (uniform(rng_r) < dispersal[sex_i])
 
                         } // end for for (int individual_i = 0; individual_i < Nind; ++individual_i)
@@ -512,7 +510,6 @@ void reproduce()
     {
         for (int row_j = 0; row_j < grid_height; ++row_j)
         {
-
             // first, for all sexes, states and ages,
             // move cubs to yearlings, yearlings to adults
             for (int sex_i = 0; sex_i < 2; ++sex_i)
@@ -545,17 +542,43 @@ void reproduce()
                             Population[column_i][row_j].
                                 inhabitants[sex_i][age][inf_state_i].
                                     push_back(
-                                            Population[column_i][row_j].inhabitants[sex_i][age-1][inf_state_i][young_i]
+                                            Population[column_i][row_j].
+                                                inhabitants[sex_i][age-1][inf_state_i][young_i]
                                             );
+                            assert(
+                                    Population[column_i][row_j].
+                                    inhabitants[sex_i][age][inf_state_i].size() > 0);
+                            
+                            assert(
+                                    Population[column_i][row_j].
+                                    inhabitants[sex_i][age][inf_state_i][
+                                        Population[column_i][row_j].
+                                        inhabitants[sex_i][age][inf_state_i].size() - 1
+                                    ].v >= 0);
+
                         }
+
 
                         // all individuals from age-1 copied to age
                         // hence set counter of all age-1 individuals to 0
-                        Population[column_i][row_j].inhabitants[sex_i][age - 1][inf_state_i].clear();
+                        Population[column_i][row_j].
+                            inhabitants[sex_i][age - 1][inf_state_i].clear();
                     } // end for int age
                 } // end for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
             } // end for (int sex_i = 0; sex_i < 2; ++sex_i)
             
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                {
+                    for (int age = 0; age < 3; ++age)
+                    {
+                        cout << "hibbles post deletion etc: " << sex_i << " " << inf_state_i << " " << age << " " << 
+                            Population[column_i][row_j].inhabitants[sex_i][age][inf_state_i].size() << endl;
+                    }
+                }
+            }
+
             n_females_total = 0; 
             n_males_total = 0; 
 
@@ -564,11 +587,17 @@ void reproduce()
             {
                 for (int age_i = 1; age_i < 3; ++age_i)
                 {
-                    n_female_cumul_dist[age_i - 1][inf_state_i] = n_females_total + Population[column_i][row_j].inhabitants[Female][age_i][inf_state_i].size();
+                    assert(age_i - 1 >= 0);
+                    cout << "pip: " << age_i << " " << age_i - 1 << " " << inf_state_i << " " << endl;
+                    n_female_cumul_dist[age_i - 1][inf_state_i] = n_females_total + 
+                        Population[column_i][row_j].
+                            inhabitants[Female][age_i][inf_state_i].size();
 
                     n_females_total = n_female_cumul_dist[age_i - 1][inf_state_i];
                     
-                    n_male_cumul_dist[age_i - 1][inf_state_i] = n_males_total + Population[column_i][row_j].inhabitants[Male][age_i][inf_state_i].size();
+                    n_male_cumul_dist[age_i - 1][inf_state_i] = n_males_total + 
+                        Population[column_i][row_j].
+                            inhabitants[Male][age_i][inf_state_i].size();
 
                     n_males_total = n_male_cumul_dist[age_i - 1][inf_state_i];
                 }
@@ -581,7 +610,7 @@ void reproduce()
             {
                 for (int age_sample_i = 1; age_sample_i < 3; ++age_sample_i)
                 {
-                    cout << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " << infection_status_sample_i << " " << age_sample_i << endl;
+                    cout << "bup: " << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " << infection_status_sample_i << " " << age_sample_i << endl;
                 }
             }
 
@@ -635,6 +664,7 @@ void reproduce()
                 bool male_found = false;
                 bool female_found = false;
 
+
                 // start a search loop to find a random father and mother
                 // we loop through a cumulative distribution of counts
                 // of individuals. If our randomly chosen number lower
@@ -653,7 +683,6 @@ void reproduce()
                 // random_male <= n_infected_males + n_susceptible_males (5 < 3 + 4; 
                 // note cumulative count): stop & choose random susceptible male
 
-                exit(1);
                 for (int infection_status_sample_i = 0; 
                         infection_status_sample_i < 3; 
                         ++infection_status_sample_i)
@@ -662,13 +691,13 @@ void reproduce()
                             age_sample_i < 3; 
                             age_sample_i++)
                     {
-                        cout << age_sample_i << endl;
-                        assert(infection_status_sample_i <= 2);
-                        assert(age_sample_i <= 2);
-
-
-                        cout << random_male << " " << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " << infection_status_sample_i << " ehh what the f... " << age_sample_i << endl;
-
+                        cout 
+                            << "rand_male_no: " << random_male << " " 
+                            << "count here: " << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " 
+                            << "infection_status: " << infection_status_sample_i << " " 
+                            << "age: " << age_sample_i << endl;
+                        
+                        
                         // is this male category 
                         // of infection_status_sample_i
                         // and age_sample_i the right one?
@@ -690,6 +719,7 @@ void reproduce()
 
                             male_found = true;
                         }
+/*
 
                         if (random_female < n_female_cumul_dist[age_sample_i][infection_status_sample_i])
                         {
@@ -710,6 +740,7 @@ void reproduce()
                         {
                             break;
                         }
+*/
                     }
                     
                     if (male_found && female_found)
@@ -717,6 +748,9 @@ void reproduce()
                         break;
                     }
                 }
+
+                assert(male_found);
+                assert(female_found);
 
                 assert(father.v >= 0.0);
                 assert(mother.v >= 0.0);
