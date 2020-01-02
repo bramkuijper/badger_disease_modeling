@@ -66,6 +66,12 @@ double mortality_rate_infected = 0.63;
 
 double K = 20;
 
+double mu = 0.0;
+double sdmu = 0.01;
+
+normal_distribution<> mutational_effect(0.0, sdmu);
+
+
 enum Sex {
     Female = 0,
     Male = 1
@@ -116,7 +122,7 @@ void init_population()
                 {
                     for (int age_i = 0; age_i < 3; ++age_i)
                     {
-                        cout << Population[column_i][row_j].inhabitants[sex_i][inf_state_i][age_i].size() << endl;
+                        cout << Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i].size() << endl;
                     }
                 }
             }
@@ -200,7 +206,7 @@ void dispersal()
                 {
                     for (int age_i = 0; age_i < 3; ++age_i)
                     {
-                        n_current_class = Population[column_i][row_j].inhabitants[sex_i][inf_state_i][age_i].size();
+                        n_current_class = Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i].size();
 
                         for (int individual_i = 0;
                                 individual_i < n_current_class; 
@@ -351,13 +357,13 @@ void mortality()
                     for (int age_i = 0; age_i < 3; ++age_i)
                     {
                         Nindtot += Population[column_i][row_j].
-                            inhabitants[sex_i][inf_state_i][age_i].size();
+                            inhabitants[sex_i][age_i][inf_state_i].size();
 
                         // calculate 
                         if (age_i > 1 && sex_i == Female)
                         {
                             NadF += Population[column_i][row_j].
-                                inhabitants[sex_i][inf_state_i][age_i].size();
+                                inhabitants[sex_i][age_i][inf_state_i].size();
                         }
                     }
                 }
@@ -370,7 +376,7 @@ void mortality()
                     for (int age_i = 0; age_i < 3; ++age_i)
                     {
                         n_current_class = Population[column_i][row_j].
-                            inhabitants[sex_i][inf_state_i][age_i].size();
+                            inhabitants[sex_i][age_i][inf_state_i].size();
 
                         mort_prob = mortality_rate;
                         
@@ -427,26 +433,35 @@ void mortality()
     }
 } // end mortality()
 
-// randomly sample an adult from a certain patch
-// (i.e., from age classes Yearling or Adult)
+// mutation function
+void mutate(double &val)
+{
+    if (uniform(rng_r) < mu)
+    {
+        val += mutational_effect(rng_r);
+    }
+
+    if (val < 0)
+    {
+        val = 0;
+    }
+}
+
+// create offspring
 //
 // Parameters:
-//      GridCell &Patch: reference to an individual
-//      gridcell from which we want to sample adults
-//      from
+//      Individual &mother  - reference to mother
+//      Individual &father - reference to father
+//      Individual &offspring - reference to offspring
 //
-//      Sex adult_sex: the required sex of the individual
-void random_sample_noncub(
-        GridCell &Patch
-        ,Sex const adult_sex
-        ,Individual &sampled)
+void create_offspring(
+        Individual &mother
+        ,Individual &father
+        ,Individual &offspring)
 {
-    for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
-    {
-        for (int age_i = 0; age_i < 3; ++age_i)
-        {
-        }
-    }
+    offspring.v = uniform(rng_r) < 0.5 ? father.v : offspring.v;
+
+    mutate(offspring.v);
 }
 
 // the reproduction function, see p393 White & Dodds
@@ -457,9 +472,6 @@ void reproduce()
     //
     // at the same time, cubs from previous year become yearlings
     //
-
-    // auxiliary variable counting females in the local patch
-    int n_females_total = 0;
 
     // auxiliary variable counting individuals younger than the current
     // age class
@@ -497,12 +509,13 @@ void reproduce()
             {
                 for (int age_i = 1; age_i < 3; ++age_i)
                 {
-                    n_females_total += Population[column_i][row_j].inhabitants[Female][inf_state_i][age_i].size();
-                    n_males_total += Population[column_i][row_j].inhabitants[Female][inf_state_i][age_i].size();
-                    n_female_cumul_dist[inf_state_i][age_i]  = Population[column_i][row_j].inhabitants[Female][inf_state_i][age_i].size();
-                    
-                    n_male_dist[age_i - 1]  = Population[column_i][row_j].inhabitants[Male][inf_state_i][age_i].size();
+                    n_female_cumul_dist[age_i][inf_state_i] = n_females_total + Population[column_i][row_j].inhabitants[Female][age_i][inf_state_i].size();
 
+                    n_females_total = n_female_cumul_dist[age_i][inf_state_i];
+                    
+                    n_male_cumul_dist[age_i - 1][inf_state_i] = n_males_total + Population[column_i][row_j].inhabitants[Male][age_i][inf_state_i].size();
+
+                    n_males_total = n_male_cumul_dist[age_i - 1][inf_state_i];
                 }
             }
 
@@ -551,7 +564,7 @@ void reproduce()
             } // end for (int sex_i = 0; sex_i < 2; ++sex_i)
 
             // now reproduce
-            if (n_females_total < 1)
+            if (n_females_total < 1 || n_males_total < 1)
             {
                 n_cubs_f = 0;
             }
@@ -573,6 +586,10 @@ void reproduce()
                 ++n_cubs_i;
             }
 
+            // make random number generators for males and females
+            uniform_int_distribution<> random_male_rng(0, n_males_total - 1);
+            uniform_int_distribution<> random_female_rng(0, n_females_total - 1);
+
             // now make the offspring due to random mating in the patch
             for (int cub_i = 0; cub_i < n_cubs_i; ++cub_i)
             {
@@ -580,15 +597,63 @@ void reproduce()
                 Individual father;
                 Individual mother;
 
-                random_sample_noncub(
-                        Population[column_i][row_j]
-                        ,Male,
-                        ,father);
+                int random_male = random_male_rng(rng_r);
+                int random_female = random_female_rng(rng_r);
 
-                random_sample_noncub(
-                        Population[column_i][row_j]
-                        ,Female
-                        ,mother);
+                bool male_found = false;
+                bool female_found = false;
+
+                for (int infection_status_sample_i = 0; infection_status_sample_i < 3; ++infection_status_sample_i)
+                {
+                    for (int age_sample_i = 1; age_sample_i < 3; ++age_sample_i)
+                    {
+                        if (random_male < n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i])
+                        {
+                            assert(Population[column_i][row_j].
+                                    inhabitants[Male][age_sample_i][infection_status_sample_i].size() > 0);
+                            uniform_int_distribution<> male_sampler(0, 
+                                    Population[column_i][row_j].
+                                        inhabitants[Male][age_sample_i][infection_status_sample_i].size() - 1
+                            );
+
+
+                            father = Population[column_i][row_j].
+                                inhabitants[Male][age_sample_i][infection_status_sample_i][
+                                male_sampler(rng_r)
+                                ];
+
+                            male_found = true;
+                        }
+
+                        if (random_female < n_female_cumul_dist[age_sample_i][infection_status_sample_i])
+                        {
+                            assert(Population[column_i][row_j].
+                                    inhabitants[Female][age_sample_i][infection_status_sample_i].size() > 0);
+                            uniform_int_distribution<> female_sampler(0, 
+                                    Population[column_i][row_j].
+                                        inhabitants[Female][age_sample_i][infection_status_sample_i].size() - 1
+                            );
+
+                            mother = Population[column_i][row_j].
+                                inhabitants[Female][age_sample_i][infection_status_sample_i][female_sampler(rng_r)];
+
+                            female_found = true;
+                        }
+
+                        if (male_found && female_found)
+                        {
+                            break;
+                        }
+                    }
+                    
+                    if (male_found && female_found)
+                    {
+                        break;
+                    }
+                }
+
+                assert(father.v > 0);
+                assert(mother.v > 0);
 
                 create_offspring(
                         mother
@@ -641,7 +706,7 @@ int main(int argc, char **argv)
         {
             write_data(generation, DataFile);
         }
-    } //j5
+    } 
 
     write_parameters(DataFile);
 }
