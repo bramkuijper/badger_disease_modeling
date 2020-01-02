@@ -6,7 +6,7 @@ CPPINDH=individual.hpp
 all : $(EXE)
 
 $(EXE) : $(CPPMAIN)  $(CPPIND) $(CPPINDH)
-	g++ -std=c++11 -Wall -O3 -o $(EXE) $(CPPMAIN) $(CPPIND)
+	g++ -ggdb3 -std=c++11 -Wall -O3 -o $(EXE) $(CPPMAIN) $(CPPIND)
 
 
 .PHONY : 

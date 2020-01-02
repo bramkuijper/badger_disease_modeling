@@ -20,7 +20,7 @@
 #include "auxiliary.hpp"
 #include "individual.hpp"
 
-#define DEBUG
+//#define DEBUG
 
 // function which clips values between min and max
 double clamp(double val, double min, double max)
@@ -33,7 +33,7 @@ using namespace std;
 
 // set up the random number generator
 // set random seed etc
-int seed = get_nanoseconds();
+int seed =1675300529; //get_nanoseconds();
 mt19937 rng_r{static_cast<unsigned int>(seed)};
 uniform_real_distribution<> uniform(0.0,1.0);
 
@@ -53,7 +53,6 @@ uniform_int_distribution<> random_row(0, grid_height - 1);
 
 // maximum number of inhabitants in a patch
 int max_number_inhabitants = 10;
-
 int max_generations = 5;
 
 // baseline mortality rate
@@ -64,7 +63,7 @@ double mortality_rate_cubs_alone = 0.9;
 double mortality_rate_cubs_highK = 0.9;
 double mortality_rate_infected = 0.63;
 
-double K = 20;
+double K = 5;
 
 double mu = 0.0;
 double sdmu = 0.01;
@@ -112,6 +111,9 @@ GridCell Population[grid_width][grid_height];
 // initialize population
 void init_population()
 {
+    // generate a standard individual
+    Individual standard_individual(0.0);
+
     for (int column_i = 0; column_i < grid_width; ++column_i)
     {
         for (int row_j = 0; row_j < grid_height; ++row_j)
@@ -120,15 +122,24 @@ void init_population()
             {
                 for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
                 {
-                    for (int age_i = 0; age_i < 3; ++age_i)
+                    // only make yearlings or older
+                    for (int age_i = 1; age_i < 3; ++age_i)
                     {
-                        cout << Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i].size() << endl;
+                        for (int individual_i = 0; 
+                                individual_i < K/2; 
+                                ++individual_i)
+                        {
+                            // add new individual to this particular stack
+                            Population[column_i][row_j].
+                                inhabitants[sex_i][age_i][inf_state_i].
+                                    push_back(standard_individual);
+                        }
                     }
                 }
             }
         }
     }
-}
+} // end void init_population()
 
 // write statistics to file datafile
 //
@@ -501,23 +512,6 @@ void reproduce()
     {
         for (int row_j = 0; row_j < grid_height; ++row_j)
         {
-            n_females_total = 0; 
-            n_males_total = 0; 
-
-            // sum over total number of females
-            for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
-            {
-                for (int age_i = 1; age_i < 3; ++age_i)
-                {
-                    n_female_cumul_dist[age_i][inf_state_i] = n_females_total + Population[column_i][row_j].inhabitants[Female][age_i][inf_state_i].size();
-
-                    n_females_total = n_female_cumul_dist[age_i][inf_state_i];
-                    
-                    n_male_cumul_dist[age_i - 1][inf_state_i] = n_males_total + Population[column_i][row_j].inhabitants[Male][age_i][inf_state_i].size();
-
-                    n_males_total = n_male_cumul_dist[age_i - 1][inf_state_i];
-                }
-            }
 
             // first, for all sexes, states and ages,
             // move cubs to yearlings, yearlings to adults
@@ -558,10 +552,40 @@ void reproduce()
                         // all individuals from age-1 copied to age
                         // hence set counter of all age-1 individuals to 0
                         Population[column_i][row_j].inhabitants[sex_i][age - 1][inf_state_i].clear();
-                               
                     } // end for int age
                 } // end for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
             } // end for (int sex_i = 0; sex_i < 2; ++sex_i)
+            
+            n_females_total = 0; 
+            n_males_total = 0; 
+
+            // sum over total number of females
+            for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+            {
+                for (int age_i = 1; age_i < 3; ++age_i)
+                {
+                    n_female_cumul_dist[age_i - 1][inf_state_i] = n_females_total + Population[column_i][row_j].inhabitants[Female][age_i][inf_state_i].size();
+
+                    n_females_total = n_female_cumul_dist[age_i - 1][inf_state_i];
+                    
+                    n_male_cumul_dist[age_i - 1][inf_state_i] = n_males_total + Population[column_i][row_j].inhabitants[Male][age_i][inf_state_i].size();
+
+                    n_males_total = n_male_cumul_dist[age_i - 1][inf_state_i];
+                }
+            }
+                        
+            // sum over total number of females
+            for (int infection_status_sample_i = 0; 
+                    infection_status_sample_i < 3; 
+                    ++infection_status_sample_i)
+            {
+                for (int age_sample_i = 1; age_sample_i < 3; ++age_sample_i)
+                {
+                    cout << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " << infection_status_sample_i << " " << age_sample_i << endl;
+                }
+            }
+
+            cout << "it's done." << endl;
 
             // now reproduce
             if (n_females_total < 1 || n_males_total < 1)
@@ -593,22 +617,64 @@ void reproduce()
             // now make the offspring due to random mating in the patch
             for (int cub_i = 0; cub_i < n_cubs_i; ++cub_i)
             {
+                // make variables to store the focal cub,
+                // its mother and father
                 Individual cub;
                 Individual father;
                 Individual mother;
 
+                // get random number for mother
+                // and father, find these numbers in the cumulative
+                // distribution of males and females
                 int random_male = random_male_rng(rng_r);
                 int random_female = random_female_rng(rng_r);
 
+                // indicator variables that are set to true 
+                // when male and female are found so that search 
+                // loop can be exited
                 bool male_found = false;
                 bool female_found = false;
 
-                for (int infection_status_sample_i = 0; infection_status_sample_i < 3; ++infection_status_sample_i)
+                // start a search loop to find a random father and mother
+                // we loop through a cumulative distribution of counts
+                // of individuals. If our randomly chosen number lower
+                // than the current count, pick this column
+                //
+                //
+                // EXAMPLE
+                // say, I have a total of 8 male badgers
+                //
+                // and three classes of male badgers (infected, susceptible, resistant)
+                // containing, respectively 3 and 4 and 1 badger
+                //
+                // I generate a random number, say, random_male=5, which badger to choose?
+                //
+                // random_male > n_infected_males (as 5 > 3), moving on
+                // random_male <= n_infected_males + n_susceptible_males (5 < 3 + 4; 
+                // note cumulative count): stop & choose random susceptible male
+
+                exit(1);
+                for (int infection_status_sample_i = 0; 
+                        infection_status_sample_i < 3; 
+                        ++infection_status_sample_i)
                 {
-                    for (int age_sample_i = 1; age_sample_i < 3; ++age_sample_i)
+                    for (int age_sample_i = 1; 
+                            age_sample_i < 3; 
+                            age_sample_i++)
                     {
+                        cout << age_sample_i << endl;
+                        assert(infection_status_sample_i <= 2);
+                        assert(age_sample_i <= 2);
+
+
+                        cout << random_male << " " << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " << infection_status_sample_i << " ehh what the f... " << age_sample_i << endl;
+
+                        // is this male category 
+                        // of infection_status_sample_i
+                        // and age_sample_i the right one?
                         if (random_male < n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i])
                         {
+                            // check whether there are individuals here? 
                             assert(Population[column_i][row_j].
                                     inhabitants[Male][age_sample_i][infection_status_sample_i].size() > 0);
                             uniform_int_distribution<> male_sampler(0, 
@@ -652,14 +718,15 @@ void reproduce()
                     }
                 }
 
-                assert(father.v > 0);
-                assert(mother.v > 0);
+                assert(father.v >= 0.0);
+                assert(mother.v >= 0.0);
 
                 create_offspring(
                         mother
                         ,father
                         ,cub);
 
+                // randomly determine sex of the cub
                 Sex sex_cub = uniform(rng_r) < 0.5 ? Female : Male;
 
                 // add cub to offsprign stack
@@ -675,6 +742,7 @@ void reproduce()
 // accepting command line arguments
 int main(int argc, char **argv)
 {
+    cout << seed << endl;
     // subroutine to initialize all the parameter values
     init_arguments(argc, argv);
     
