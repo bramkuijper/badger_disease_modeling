@@ -465,7 +465,7 @@ void reproduce()
             {
                 for (int age_i = 1; age_i < 3; ++age_i)
                 {
-                    n_females_total += Population[column_i][row_j].inhabitants[Female][inf_state_i][age_i];
+                    n_females_total += Population[column_i][row_j].inhabitants[Female][inf_state_i][age_i].size();
                     size_dist[age_i - 1]  = Population[column_i][row_j].inhabitants[Female][inf_state_i][age_i].size();
 
                 }
@@ -509,7 +509,7 @@ void reproduce()
 
                         // all individuals from age-1 copied to age
                         // hence set counter of all age-1 individuals to 0
-                        Population[column_i][row_j].inhabitants[sex_i][age-1][inf_state_i].clear();
+                        Population[column_i][row_j].inhabitants[sex_i][age - 1][inf_state_i].clear();
                                
                     } // end for int age
                 } // end for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
