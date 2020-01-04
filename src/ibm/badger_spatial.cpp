@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <cassert>
 #include <vector>
+#include <utility>
 
 #include <random>
 
@@ -64,6 +65,8 @@ double mortality_rate_cubs_highK = 0.9;
 double mortality_rate_infected = 0.63;
 
 double K = 5;
+double tau = 1.0;
+double phi = 0.5;
 
 double mu = 0.0;
 double sdmu = 0.01;
@@ -151,7 +154,25 @@ void init_population()
 //  ofstream &datafile:
 //      reference to a ofstream object
 //      to which the data will be written
-void write_data(
+void write_statistics(
+        int const generation,
+        ofstream &datafile)
+{
+}
+
+// write_spatial_snapshot
+//
+// writes a snapshot of the current spatial configuration
+//
+// parameters:
+// -----------
+//  int const generation: 
+//      the current generation
+//
+//  ofstream &datafile:
+//      reference to a ofstream object
+//      to which the data will be written
+void write_spatial_snapshot(
         int const generation,
         ofstream &datafile)
 {
@@ -186,14 +207,169 @@ void init_arguments(int argc, char **argv)
 void write_parameters(
         ofstream &datafile)
 {
+    datafile
+        << endl
+        << endl // two line breaks to have a space between data and the parameters
+        << "tau;" << tau << endl// the 
+        << "phi;" << tau << endl;// the 
 }
 
-// function or subroutine for intergroup transmission
-void intergroup_transmission()
+// overall product of contact rates and transmission probability
+double beta(double const v)
 {
-
-
+    return(phi * v / (v + tau));
 }
+
+// function or subroutine for intragroup transmission
+void intragroup_transmission()
+{
+    // we need to make a probability distribution of infection probabilities
+    // where we have to remember the individual parasites
+    //
+    // hence we create a cumulative distribution of infection probabilities
+    // draw a random number from this cumulative distribution 
+    // and where the random number 'falls' within the distribution, this is 
+    // the parasite that is going to infect matters 
+    //
+    // make a vector of pairs (first value cumulative value
+    // second value the virulence trait of the parasite
+    typedef pair <double, double> cumul_virulence_pair;
+    vector < cumul_virulence_pair > prob_infect_cumul;
+
+    // total cumulative value of infectivity
+    double infectivity_cumul_total = 0.0;
+    double random_cumul_sample = 0.0;
+
+    // auxiliary variables
+    double current_cumul_val; // current cumulative value
+    double current_v; // current value of virulence
+    double current_beta; // current value of virulence
+
+    // auxiliary variable storing population sizes etc
+    int Nind;
+    
+    int local_popsize;
+    
+    // first calculate infection probability
+    for (int column_i = 0; column_i < grid_width; ++column_i)
+    {
+        for (int row_j = 0; row_j < grid_height; ++row_j)
+        {
+            // clear the vector containing (cumulative distribution, virulence) pairs
+            prob_infect_cumul.clear();
+
+            // make a cumulative distribution of per capita infectivity
+            infectivity_cumul_total = 0.0;
+
+            local_popsize = 0;
+            
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int age_i = 0; age_i < 3; ++age_i)
+                {
+                    for (int state_i = 0; state_i < 3; ++state_i)
+                    {
+                        local_popsize += Population[column_i][row_j].
+                                            inhabitants[sex_i][age_i][state_i].size();
+                    }
+                }
+            }
+
+
+            // go over all infected individuals and make 
+            // a per capita infectivity distribution
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int age_i = 0; age_i < 3; ++age_i)
+                {
+                    Nind = Population[column_i][row_j].
+                                inhabitants[sex_i][age_i][Infectious].size();
+
+                    for (int individual_i = 0; individual_i < Nind; ++individual_i)
+                    {
+                        // remember current value of virulence
+                        current_v = Population[column_i][row_j].
+                                            inhabitants[sex_i][age_i][Infectious][individual_i].v;
+                        assert(current_v >= 0.0);
+
+                        // see Allen 1994 Math Biosci p 86
+                        current_beta = beta(current_v) / local_popsize;
+
+                        infectivity_cumul_total = current_cumul_val = 
+                            infectivity_cumul_total + current_beta;
+
+                        cumul_virulence_pair current_pair{current_cumul_val, current_v};
+                        
+                        prob_infect_cumul.push_back(current_pair);
+                    }
+                }
+            } 
+            
+            // made cumulative distribution of infection
+            // probabilities, now infect susceptibles
+
+            assert(infectivity_cumul_total <= 1.0);
+
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int age_i = 0; age_i < 3; ++age_i)
+                {
+                    // how many susceptibles in this category?
+                    Nind = Population[column_i][row_j].
+                                inhabitants[sex_i][age_i][Susceptible].size();
+
+                    for (int individual_i = 0; individual_i < Nind; ++individual_i)
+                    {
+                        // this individual won't be infected, next
+                        if (uniform(rng_r) > infectivity_cumul_total)
+                        {
+                            continue;
+                        }
+                        
+                        // now who will infect this individual?
+                        random_cumul_sample = uniform(rng_r) * infectivity_cumul_total;
+
+                        // iterate over vector
+                        for (vector<cumul_virulence_pair>::iterator it = 
+                                    prob_infect_cumul.begin();
+                                it != prob_infect_cumul.end();
+                                ++it)
+                        {
+                            // found the individual?
+                            if (random_cumul_sample <= it->first)
+                            {
+                                // transmit parasite's genetic virulence value
+                                Population[column_i][row_j].
+                                    inhabitants[sex_i][age_i][Susceptible][individual_i].v =
+                                        it->second;
+
+                                // add individual to stack of 
+                                // infectious individuals
+                                Population[column_i][row_j].
+                                    inhabitants[sex_i][age_i][Infectious].push_back(
+                                    Population[column_i][row_j].
+                                        inhabitants[sex_i][age_i][Susceptible][individual_i]
+                                    );
+
+                                // now remove from susceptible stack
+                                Population[column_i][row_j].
+                                    inhabitants[sex_i][age_i][Susceptible].erase(
+                                        Population[column_i][row_j].
+                                            inhabitants[sex_i][age_i][Susceptible].begin()
+                                            + individual_i
+                                    );
+
+                                --Nind;
+                                --individual_i;
+                                break; // break out of cumulative distribution for loop
+                            } // end if(random_cumul_val)
+                        } // end for (vector<T>::iterator it = prob_infect_cumul.begin();
+                    } //end for int individual_i
+                } // end for int age_i
+            } //end for int sex_i
+        } // end for (int row_j = 0; row_j < grid_height; ++row_j)
+    } // end for (int column_i = 0; column_i < grid_width; ++column_i)
+} // end void intragroup_transmission()
 
 // dispersal of individuals among patches
 void dispersal()
@@ -283,12 +459,20 @@ void dispersal()
 
                                 // move the individual from original spot
                                 // to new immigrant stack
-                                Population[column_destination][row_destination].immigrants[sex_i][age_i][inf_state_i].push_back(
-                                        Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i][individual_i]
-                                        );
+                                Population[column_destination][row_destination].
+                                    immigrants[sex_i][age_i][inf_state_i].push_back(
+                                        Population[column_i][row_j].
+                                            inhabitants[sex_i][age_i][inf_state_i][individual_i]
+                                );
 
-                                Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i].erase(
-                                        Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i].begin() + individual_i);
+                                // remove individual from current habitat
+                                Population[column_i][row_j].
+                                    inhabitants[sex_i][age_i][inf_state_i].erase(
+                                        Population[column_i][row_j].
+                                            inhabitants[sex_i][age_i][inf_state_i].begin() 
+                                            + individual_i
+                                );
+
                                 --n_current_class;
                                 --individual_i;
 
@@ -318,14 +502,25 @@ void dispersal()
                 {
                     for (int age_i = 0; age_i < 3; ++age_i)
                     {
-                        int Nimm = Population[column_i][row_j].immigrants[sex_i][age_i][inf_state_i].size();
+                        // get total number of immigrants to add
+                        int Nimm = Population[column_i][row_j].
+                                    immigrants[sex_i][age_i][inf_state_i].size();
+
                         for (int immigrant_i = 0; immigrant_i < Nimm; ++immigrant_i)
                         {
-                            Population[column_i][row_j].inhabitants[sex_i][age_i][inf_state_i].push_back(Population[column_i][row_j].immigrants[sex_i][age_i][inf_state_i][immigrant_i]);
+                            // add arriving immigrants to the current population
+                            // inhabitants
+                            Population[column_i][row_j].
+                                inhabitants[sex_i][age_i][inf_state_i].
+                                    push_back(
+                                            Population[column_i][row_j].
+                                                immigrants[sex_i][age_i][inf_state_i][immigrant_i]
+                            );
                         }
 
                         // all immigrants copied to the inhabitant stack, erase them
-                        Population[column_i][row_j].immigrants[sex_i][age_i][inf_state_i].clear();
+                        Population[column_i][row_j].
+                            immigrants[sex_i][age_i][inf_state_i].clear();
 
                     } // end for (int age_i = 0; age_i < 3; ++age_i)
 
@@ -347,6 +542,8 @@ void mortality()
 
     // auxiliary variable containing the mortality probabilty
     double mort_prob;
+
+    double v;
 
     for (int column_i = 0; column_i < grid_width; ++column_i)
     {
@@ -400,8 +597,6 @@ void mortality()
 
                         if (age_i == 0)
                         {
-                            mort_prob = mortality_rate;
-
                             if (NadF == 0)
                             {
                                 mort_prob = mortality_rate_cubs_alone;
@@ -412,13 +607,20 @@ void mortality()
                             }
                         }
 
-                        if ((State) inf_state_i == Infectious)
-                        {
-                            mort_prob = mortality_rate_infected;
-                        }
 
                         for (int individual_i = 0; individual_i < n_current_class; ++individual_i)
                         {
+                            // if individual is infected the virulence of
+                            // bovine TB will be important
+                            if ((State) inf_state_i == Infectious)
+                            {
+                                v = Population[column_i][row_j].
+                                        inhabitants[sex_i][age_i][inf_state_i][individual_i].v;
+
+                                assert(v >= 0);
+
+                                mort_prob += v;
+                            }
                             // individual is sampled as one that dies
                             //
                             // death in yearlings and beyond according to fixed mort rate
@@ -428,7 +630,7 @@ void mortality()
                                 Population[column_i][row_j].
                                     inhabitants[sex_i][age_i][inf_state_i].erase(
                                 Population[column_i][row_j].
-                                    inhabitants[sex_i][age_i][inf_state_i].begin() + n_current_class
+                                    inhabitants[sex_i][age_i][inf_state_i].begin() + individual_i
                                     );
                             
                                 --individual_i;
@@ -567,18 +769,6 @@ void reproduce()
                 } // end for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
             } // end for (int sex_i = 0; sex_i < 2; ++sex_i)
             
-//            for (int sex_i = 0; sex_i < 2; ++sex_i)
-//            {
-//                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
-//                {
-//                    for (int age = 0; age < 3; ++age)
-//                    {
-//                        cout << "hibbles post deletion etc: " << sex_i << " " << inf_state_i << " " << age << " " << 
-//                            Population[column_i][row_j].inhabitants[sex_i][age][inf_state_i].size() << endl;
-//                    }
-//                }
-//            }
-
             n_females_total = 0; 
             n_males_total = 0; 
 
@@ -588,7 +778,6 @@ void reproduce()
                 for (int age_i = 1; age_i < 3; ++age_i)
                 {
                     assert(age_i - 1 >= 0);
-//                    cout << "pip: " << age_i << " " << age_i - 1 << " " << inf_state_i << " " << endl;
                     n_female_cumul_dist[age_i - 1][inf_state_i] = n_females_total + 
                         Population[column_i][row_j].
                             inhabitants[Female][age_i][inf_state_i].size();
@@ -603,21 +792,6 @@ void reproduce()
                 }
             }
                         
-//            // sum over total number of females
-//            for (int infection_status_sample_i = 0; 
-//                    infection_status_sample_i < 3; 
-//                    ++infection_status_sample_i)
-//            {
-//                for (int age_sample_i = 1; age_sample_i < 3; ++age_sample_i)
-//                {
-//                    cout << "bup: " 
-//                        << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " 
-//                        << infection_status_sample_i << " " << age_sample_i << endl;
-//                }
-//            }
-
-//            cout << "it's done." << endl;
-
             // now reproduce
             if (n_females_total < 1 || n_males_total < 1)
             {
@@ -693,18 +867,12 @@ void reproduce()
                             age_sample_i < 3; 
                             ++age_sample_i)
                     {
-//                        cout 
-//                            << "rand_male_no: " << random_male << " " 
-//                            << "rand_female_no: " << random_female << " " 
-//                            << "cumulative count male: " << n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " 
-//                            << "cumulative count female: " << n_female_cumul_dist[age_sample_i - 1][infection_status_sample_i] << " " 
-//                            << "infection_status: " << infection_status_sample_i << " " 
-//                            << "age: " << age_sample_i << endl;
-                        
                         // is this male category 
                         // of infection_status_sample_i
                         // and age_sample_i the right one?
-                        if (!male_found && random_male < n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i])
+                        if (!male_found && 
+                                random_male < 
+                                    n_male_cumul_dist[age_sample_i - 1][infection_status_sample_i])
                         {
                             // check whether there are individuals here? 
                             assert(Population[column_i][row_j].
@@ -777,7 +945,6 @@ void reproduce()
 // accepting command line arguments
 int main(int argc, char **argv)
 {
-    cout << seed << endl;
     // subroutine to initialize all the parameter values
     init_arguments(argc, argv);
     
@@ -797,10 +964,9 @@ int main(int argc, char **argv)
     // the key part of the code
     for (int generation = 0; generation < max_generations; ++generation)
     {
-        cout << "generation " << generation << endl;
         reproduce();
 
-        intergroup_transmission();
+        intragroup_transmission();
         
         dispersal();
 
@@ -808,11 +974,12 @@ int main(int argc, char **argv)
 
         if (generation % skip == 0)
         {
-            write_data(generation, DataFile);
+            write_statistics(generation, DataFile);
         }
     } 
 
     write_parameters(DataFile);
+    cout << "ok, boomer!" << endl;
 }
 
 
