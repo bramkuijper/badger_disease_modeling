@@ -194,6 +194,8 @@ void write_data_headers(
 // 
 void init_arguments(int argc, char **argv)
 {
+    // command line parsing using getopt
+        
 
 }
 
