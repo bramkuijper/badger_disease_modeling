@@ -11,8 +11,13 @@ $(EXE) : $(CPPMAIN)  $(CPPIND) $(CPPINDH)
 
 .PHONY : 
 	clean
+	cleanall
 
 
 clean :
 	rm -rf $(EXE)
+
+cleanall :
+	rm -rf $(EXE)
+	rm -rf sim*
 

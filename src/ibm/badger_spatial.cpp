@@ -23,10 +23,10 @@
 
 //#define DEBUG
 
-// function which clips values between min and max
-double clamp(double val, double min, double max)
+// function which clips values between (min and max)
+void clamp(double &val, double min, double max)
 {
-    return(val > max ? max : val < min ? min : val);
+    val = val > max ? max : val < min ? min : val;
 }
 
 // standard namespace
@@ -34,7 +34,7 @@ using namespace std;
 
 // set up the random number generator
 // set random seed etc
-int seed =1675300529; //get_nanoseconds();
+int seed =get_nanoseconds();
 mt19937 rng_r{static_cast<unsigned int>(seed)};
 uniform_real_distribution<> uniform(0.0,1.0);
 
@@ -42,6 +42,7 @@ uniform_real_distribution<> uniform(0.0,1.0);
 uniform_int_distribution<> dispersal_direction(0, 3);
 
 int skip = 1;
+int space_skip = 1;
 
 // parameters & variables:
 
@@ -49,8 +50,8 @@ int skip = 1;
 int const grid_width = 12;
 int const grid_height = 12;
 
-uniform_int_distribution<> random_column(0, grid_width - 1);
-uniform_int_distribution<> random_row(0, grid_height - 1);
+uniform_int_distribution<int> random_column(0, grid_width - 1);
+uniform_int_distribution<int> random_row(0, grid_height - 1);
 
 // maximum number of inhabitants in a patch
 int max_number_inhabitants = 10;
@@ -62,13 +63,12 @@ double mortality_rate = 0.2;
 // mortality rate when cubs are without adult female
 double mortality_rate_cubs_alone = 0.9;
 double mortality_rate_cubs_highK = 0.9;
-double mortality_rate_infected = 0.63;
 
 double K = 5;
 double tau = 1.0;
 double phi = 0.5;
 
-double mu = 0.0;
+double mu = 0.01;
 double sdmu = 0.01;
 
 normal_distribution<> mutational_effect(0.0, sdmu);
@@ -93,6 +93,8 @@ enum State {
 
 // dispersal probability per year for females and males respectively
 double dispersal_probs[2] = { 0.02,0.06 };
+
+double init_v = 0.0;
 
 // define a cell in the grid
 struct GridCell {
@@ -155,10 +157,105 @@ void init_population()
 //      reference to a ofstream object
 //      to which the data will be written
 void write_statistics(
-        int const generation,
+        int const timestep,
         ofstream &datafile)
 {
-}
+    // collect total numbers of individuals
+    // in all classes
+    int N[2][3][3];
+    int Nss[2][3][3];
+
+    // calculate virulence
+    double meanv = 0.0;
+    double ssv = 0.0;
+
+    int Ntotal = 0;
+    int Ntotal_infected = 0;
+
+    // initialize counters to 0
+    for (int sex_i = 0; sex_i < 2; ++sex_i)
+    {
+        for (int age_i = 0; age_i < 3; ++age_i)
+        {
+            for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+            {
+                N[sex_i][age_i][inf_state_i] = 0;
+                Nss[sex_i][age_i][inf_state_i] = 0;
+            }
+        }
+    }
+
+    // some temporary storage variables
+    int the_size;
+    double v;
+
+    for (int column_i = 0; column_i < grid_width; ++column_i)
+    {
+        for (int row_j = 0; row_j < grid_height; ++row_j)
+        {
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int age_i = 0; age_i < 3; ++age_i)
+                {
+                    for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                    {
+                        the_size = Population[column_i][row_j].
+                            inhabitants[sex_i][age_i][inf_state_i].size();
+
+                        N[sex_i][age_i][inf_state_i] += the_size;
+                        Ntotal += the_size;
+                        
+                        Nss[sex_i][age_i][inf_state_i] += the_size * the_size;
+
+                        if ((State) inf_state_i != Susceptible)
+                        {
+                            Ntotal_infected += the_size;
+
+                            for (int individual_i = 0; individual_i < the_size; ++individual_i)
+                            {
+                                v = Population[column_i][row_j].
+                                    inhabitants[sex_i][age_i][inf_state_i][individual_i].v;
+
+                                meanv += v;
+                                ssv += v*v;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    int meanN;
+
+    datafile << timestep << ";";
+
+    for (int sex_i = 0; sex_i < 2; ++sex_i)
+    {
+        for (int age_i = 0; age_i < 3; ++age_i)
+        {
+            for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+            {
+                meanN = N[sex_i][age_i][inf_state_i]/(grid_width * grid_height);
+
+                datafile << N[sex_i][age_i][inf_state_i] << ";"
+                            << meanN << ";"
+                            << Nss[sex_i][age_i][inf_state_i]/(grid_width * grid_height) 
+                                - meanN * meanN << ";";
+
+            }
+        }
+    }
+
+    meanv /= Ntotal_infected;
+    ssv /= Ntotal_infected;
+
+    datafile << meanv << ";"
+            << ssv - meanv * meanv << ";" 
+            << Ntotal << ";"
+            << Ntotal_infected << ";"
+            << endl;
+} // write_statistics()
 
 // write_spatial_snapshot
 //
@@ -173,30 +270,98 @@ void write_statistics(
 //      reference to a ofstream object
 //      to which the data will be written
 void write_spatial_snapshot(
-        int const generation,
+        int const timestep,
         ofstream &datafile)
 {
-}
+    for (int column_i = 0; column_i < grid_width; ++column_i)
+    {
+        for (int row_j = 0; row_j < grid_height; ++row_j)
+        {
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+                {
+                    // only make yearlings or older
+                    for (int age_i = 1; age_i < 3; ++age_i)
+                    {
+                        datafile 
+                            << timestep << ";"
+                            << column_i << ";"
+                            << row_j << ";"
+                            << (sex_i == 0 ? "F" : "M") << ";"
+                            << age_i << ";"
+                            << inf_state_i << ";"
+                            << Population[column_i][row_j].
+                                inhabitants[sex_i][age_i][inf_state_i].size() << ";" << endl;
+                    }
+                }
+            }
+        }
+    }
+} // end void write_spatial_snapshot(
+
+
 
 // write the headers of the file containing the data
 //
 // parameters:
 // -----------
 //  ofstream &datafile:
-//      reference to a ofstream object
-//      to which the data will be written
+//      reference to an ofstream object
+//      to which the 'normal' data will be written
+//      (counts and averages)
+//
+//  ofstream &datafile_space
+//      reference to an ofstream object
+//      to which spatial snapshots will be written
+//      see write_spatial_snapshot()
 void write_data_headers(
-        ofstream &datafile)
+        ofstream &datafile_counts
+        ,ofstream &datafile_space)
 {
+    datafile_counts << "time;";
+    string inf_state_chr[3] = {"S","L","I"};
 
-}
+    ostringstream oss;
 
-// 
+    for (int sex_i = 0; sex_i < 2; ++sex_i)
+    {
+        for (int age_i = 0; age_i < 3; ++age_i)
+        {
+            for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+            {
+                oss << (sex_i == 0 ? "F":"M") 
+                    << age_i
+                    << inf_state_chr[inf_state_i]; 
+
+                datafile_counts 
+                    << "N_" << oss.str() << ";"
+                    << "meanN_" << oss.str() << ";"
+                    << "varN_" << oss.str() << ";";
+            }
+        }
+    }
+
+    datafile_counts << "meanv;varv;Ntotal;Ntotal_infected;" << endl;
+
+    datafile_space << 
+        "time;column;row;sex;age;inf_state;N;" << endl;
+
+} // end write_data_headers()
+
+// get arguments from the command line
 void init_arguments(int argc, char **argv)
 {
     // command line parsing using getopt
-        
-
+    tau = atof(argv[1]);
+    phi = atof(argv[2]);
+    mortality_rate = atof(argv[3]);
+    mortality_rate_cubs_alone = atof(argv[4]);
+    mortality_rate_cubs_highK = atof(argv[5]);
+    init_v = atof(argv[6]);
+    K = atof(argv[7]);
+    mu = atof(argv[8]);
+    sdmu = atof(argv[9]);
 }
 
 // writes parameters used in the simulation to a file
@@ -609,9 +774,11 @@ void mortality()
                             }
                         }
 
-
+                        double mort_prob_i = 0.0;
                         for (int individual_i = 0; individual_i < n_current_class; ++individual_i)
                         {
+                            mort_prob_i = mort_prob;
+
                             // if individual is infected the virulence of
                             // bovine TB will be important
                             if ((State) inf_state_i == Infectious)
@@ -621,12 +788,12 @@ void mortality()
 
                                 assert(v >= 0);
 
-                                mort_prob += v;
+                                mort_prob_i += v;
                             }
                             // individual is sampled as one that dies
                             //
                             // death in yearlings and beyond according to fixed mort rate
-                            if (uniform(rng_r) < mort_prob)
+                            if (uniform(rng_r) < mort_prob_i)
                             {
                                 // delete this individual
                                 Population[column_i][row_j].
@@ -653,11 +820,6 @@ void mutate(double &val)
     {
         val += mutational_effect(rng_r);
     }
-
-    if (val < 0)
-    {
-        val = 0;
-    }
 }
 
 // create offspring
@@ -675,6 +837,7 @@ void create_offspring(
     offspring.v = uniform(rng_r) < 0.5 ? father.v : offspring.v;
 
     mutate(offspring.v);
+    clamp(offspring.v, 0.0, 1.0);
 }
 
 // the reproduction function, see p393 White & Dodds
@@ -742,6 +905,9 @@ void reproduce()
 
                         for (int young_i = 0; young_i < nyoung; ++young_i)
                         {
+                            assert(
+                                    Population[column_i][row_j].
+                                                inhabitants[sex_i][age-1][inf_state_i][young_i].v >= 0);
                             // copy individual from age - 1 to class age
                             Population[column_i][row_j].
                                 inhabitants[sex_i][age][inf_state_i].
@@ -752,7 +918,7 @@ void reproduce()
                             assert(
                                     Population[column_i][row_j].
                                     inhabitants[sex_i][age][inf_state_i].size() > 0);
-                            
+                                    
                             assert(
                                     Population[column_i][row_j].
                                     inhabitants[sex_i][age][inf_state_i][
@@ -931,6 +1097,8 @@ void reproduce()
                         ,father
                         ,cub);
 
+                assert(cub.v >= 0.0);
+
                 // randomly determine sex of the cub
                 Sex sex_cub = uniform(rng_r) < 0.5 ? Female : Male;
 
@@ -938,6 +1106,7 @@ void reproduce()
                 // all cubs are born as susceptible
                 Population[column_i][row_j].
                     inhabitants[sex_cub][Cub][Susceptible].push_back(cub);
+                            
             }
         }// end for (int row_j = 0; row_j < grid_height; ++row_j)
     } // end for (int column_i = 0; column_i < grid_width; ++column_i)
@@ -955,9 +1124,10 @@ int main(int argc, char **argv)
     string filename = "sim_badger";
     create_filename(filename);
     ofstream DataFile(filename);
+    ofstream SpatialFile(filename + "_space");
     
     // function that writes headers to my data file
-    write_data_headers(DataFile);
+    write_data_headers(DataFile, SpatialFile);
 
     // initialize the population (give all the badgers
     // some values)
@@ -978,10 +1148,14 @@ int main(int argc, char **argv)
         {
             write_statistics(generation, DataFile);
         }
+
+        if (generation % space_skip == 0)
+        {
+            write_spatial_snapshot(generation, SpatialFile);
+        }
     } 
 
     write_parameters(DataFile);
-    cout << "ok, boomer!" << endl;
 }
 
 
