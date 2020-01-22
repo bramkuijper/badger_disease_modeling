@@ -34,7 +34,7 @@ using namespace std;
 
 // set up the random number generator
 // set random seed etc
-int seed =get_nanoseconds();
+int seed=get_nanoseconds();
 mt19937 rng_r{static_cast<unsigned int>(seed)};
 uniform_real_distribution<> uniform(0.0,1.0);
 
@@ -53,9 +53,7 @@ int const grid_height = 12;
 uniform_int_distribution<int> random_column(0, grid_width - 1);
 uniform_int_distribution<int> random_row(0, grid_height - 1);
 
-// maximum number of inhabitants in a patch
-int max_number_inhabitants = 10;
-int max_generations = 5;
+int max_generations = 100;
 
 // baseline mortality rate
 double mortality_rate = 0.2;
@@ -117,7 +115,7 @@ GridCell Population[grid_width][grid_height];
 void init_population()
 {
     // generate a standard individual
-    Individual standard_individual(0.0);
+    Individual standard_individual(init_v);
 
     for (int column_i = 0; column_i < grid_width; ++column_i)
     {
@@ -165,6 +163,11 @@ void write_statistics(
     int N[2][3][3];
     int Nss[2][3][3];
 
+    // overall totals per sex, age, etc
+    int total_per_sex[2] = {0,0};
+    int total_per_age[3] = {0,0,0};
+    int total_per_inf_state[3] = {0,0,0};
+
     // calculate virulence
     double meanv = 0.0;
     double ssv = 0.0;
@@ -201,6 +204,10 @@ void write_statistics(
                     {
                         the_size = Population[column_i][row_j].
                             inhabitants[sex_i][age_i][inf_state_i].size();
+
+                        total_per_sex[sex_i] += the_size;
+                        total_per_age[age_i] += the_size;
+                        total_per_inf_state[inf_state_i] += the_size;
 
                         N[sex_i][age_i][inf_state_i] += the_size;
                         Ntotal += the_size;
@@ -247,13 +254,34 @@ void write_statistics(
         }
     }
 
-    meanv /= Ntotal_infected;
-    ssv /= Ntotal_infected;
+    for (int sex_i = 0; sex_i < 2; ++sex_i)
+    {
+        datafile << total_per_sex[sex_i] << ";";
+    }
+    
+    for (int age_i = 0; age_i < 3; ++age_i)
+    {
+        datafile << total_per_age[age_i] << ";";
+    }
+    
+    for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
+    {
+        datafile << total_per_inf_state[inf_state_i] << ";";
+    }
+
+    if (Ntotal_infected > 0)
+    {
+        meanv /= Ntotal_infected;
+        ssv /= Ntotal_infected;
+    }
+    else
+    {
+        meanv = 0.0;
+        ssv = 0.0;
+    }
 
     datafile << meanv << ";"
             << ssv - meanv * meanv << ";" 
-            << Ntotal << ";"
-            << Ntotal_infected << ";"
             << endl;
 } // write_statistics()
 
@@ -322,17 +350,16 @@ void write_data_headers(
     datafile_counts << "time;";
     string inf_state_chr[3] = {"S","L","I"};
 
-    ostringstream oss;
-
     for (int sex_i = 0; sex_i < 2; ++sex_i)
     {
         for (int age_i = 0; age_i < 3; ++age_i)
         {
             for (int inf_state_i = 0; inf_state_i < 3; ++inf_state_i)
             {
+                ostringstream oss;
                 oss << (sex_i == 0 ? "F":"M") 
-                    << age_i
-                    << inf_state_chr[inf_state_i]; 
+                    << "_age" << age_i
+                    << "_" << inf_state_chr[inf_state_i]; 
 
                 datafile_counts 
                     << "N_" << oss.str() << ";"
@@ -342,7 +369,22 @@ void write_data_headers(
         }
     }
 
-    datafile_counts << "meanv;varv;Ntotal;Ntotal_infected;" << endl;
+    for (int sex_i = 0; sex_i < 2; ++sex_i)
+    {
+        datafile_counts << "N" << (sex_i == 0 ? "F":"M") << ";";
+    }
+    
+    for (int age_i = 0; age_i < 3; ++age_i)
+    {
+        datafile_counts << "N_age" << age_i << ";";
+    }
+    
+    for (int inf_status_i = 0; inf_status_i < 3; ++inf_status_i)
+    {
+        datafile_counts << "N_" << inf_state_chr[inf_status_i] << ";";
+    }
+
+    datafile_counts << "meanv;varv;" << endl;
 
     datafile_space << 
         "time;column;row;sex;age;inf_state;N;" << endl;
@@ -377,8 +419,15 @@ void write_parameters(
     datafile
         << endl
         << endl // two line breaks to have a space between data and the parameters
-        << "tau;" << tau << endl// the 
-        << "phi;" << tau << endl;// the 
+        << "tau;" << tau << endl
+        << "seed;" << seed << endl
+        << "KI;" << K << endl
+        << "phi;" << phi << endl
+        << "mu;" << sdmu << endl
+        << "init_v;" << init_v << endl
+        << "mortality_rate_cubs_high_K;" << mortality_rate_cubs_highK << endl
+        << "mortality_rate_cubs_alone;" << mortality_rate_cubs_alone << endl
+        << "mortality_rate;" << mortality_rate_cubs_alone << endl;
 }
 
 // overall product of contact rates and transmission probability
@@ -898,10 +947,8 @@ void reproduce()
 
                         // bounds checking
                         assert(nyoung >= 0);
-                        assert(nyoung <= max_number_inhabitants);
 
-                        assert(n_current_age + nyoung >= 0);
-                        assert(n_current_age + nyoung <= max_number_inhabitants);
+                        assert(n_current_age >= 0);
 
                         for (int young_i = 0; young_i < nyoung; ++young_i)
                         {
@@ -1126,6 +1173,7 @@ int main(int argc, char **argv)
     ofstream DataFile(filename);
     ofstream SpatialFile(filename + "_space");
     
+    
     // function that writes headers to my data file
     write_data_headers(DataFile, SpatialFile);
 
@@ -1154,8 +1202,8 @@ int main(int argc, char **argv)
             write_spatial_snapshot(generation, SpatialFile);
         }
     } 
-
     write_parameters(DataFile);
+
 }
 
 

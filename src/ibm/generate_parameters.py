@@ -21,10 +21,10 @@ phi = 1.0
 mu = 0.01
 sdmu = 0.01
 
-init_v = 0.5
+init_v =1.0
 
 
-nrep = 3
+nrep = 100
 
 counter = 1
 
