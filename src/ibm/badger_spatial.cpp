@@ -443,8 +443,20 @@ double beta(double const v)
     return(phi * v / (v + tau));
 }
 
+// mutation function
+void mutate(double &val)
+{
+    if (uniform(rng_r) < mu)
+    {
+        val += mutational_effect(rng_r);
+
+    }
+
+}
+
+
 // function or subroutine for intragroup transmission
-void intragroup_transmission()
+void intragroup_transmission(int timestep)
 {
     // we need to make a probability distribution of infection probabilities
     // where we have to remember the individual parasites
@@ -472,6 +484,7 @@ void intragroup_transmission()
     int Nind;
     
     int local_popsize;
+    double v_val;
     
     // first calculate infection probability
     for (int column_i = 0; column_i < grid_width; ++column_i)
@@ -516,7 +529,9 @@ void intragroup_transmission()
                         assert(current_v >= 0.0);
 
                         // see Allen 1994 Math Biosci p 86
-                        current_beta = beta(current_v) / local_popsize;
+                        //current_beta = beta(current_v) / local_popsize;
+                        current_beta = beta(current_v);
+                        //cout << current_beta << endl;
 
                         infectivity_cumul_total = current_cumul_val = 
                             infectivity_cumul_total + current_beta;
@@ -531,7 +546,8 @@ void intragroup_transmission()
             // made cumulative distribution of infection
             // probabilities, now infect susceptibles
 
-            assert(infectivity_cumul_total <= 1.0);
+//            assert(infectivity_cumul_total <= 1.0);
+            // cout << infectivity_cumul_total << endl;
 
             for (int sex_i = 0; sex_i < 2; ++sex_i)
             {
@@ -543,12 +559,6 @@ void intragroup_transmission()
 
                     for (int individual_i = 0; individual_i < Nind; ++individual_i)
                     {
-                        // this individual won't be infected, next
-                        if (uniform(rng_r) > infectivity_cumul_total)
-                        {
-                            continue;
-                        }
-                        
                         // now who will infect this individual?
                         random_cumul_sample = uniform(rng_r) * infectivity_cumul_total;
 
@@ -561,10 +571,15 @@ void intragroup_transmission()
                             // found the individual?
                             if (random_cumul_sample <= it->first)
                             {
+
+                                v_val = it->second;
+                                mutate(v_val);
+                                clamp(v_val,0.0,1.0);
+
                                 // transmit parasite's genetic virulence value
                                 Population[column_i][row_j].
-                                    inhabitants[sex_i][age_i][Susceptible][individual_i].v =
-                                        it->second;
+                                    inhabitants[sex_i][age_i][Susceptible][individual_i].v = v_val;
+                                
 
                                 // add individual to stack of 
                                 // infectious individuals
@@ -872,15 +887,6 @@ void mortality()
         }
     }
 } // end mortality()
-
-// mutation function
-void mutate(double &val)
-{
-    if (uniform(rng_r) < mu)
-    {
-        val += mutational_effect(rng_r);
-    }
-}
 
 // create offspring
 //
@@ -1205,7 +1211,7 @@ int main(int argc, char **argv)
 
         reproduce();
         
-        intragroup_transmission();
+        intragroup_transmission(generation);
         
         dispersal();
 
