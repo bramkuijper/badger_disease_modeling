@@ -10,7 +10,7 @@ mortality_rate = 0.2
 mortality_rate_cubs_alone = 0.9
 mortality_rate_cubs_highK = 0.9
 
-K = 5;
+K = 20;
 
 # value at which virulence is 0.5 that of maximum
 tau = 0.5
@@ -18,10 +18,10 @@ tau = 0.5
 # transmission coefficient
 phi = 1.0
 
-mu = 0.01
+mu = 0.05
 sdmu = 0.01
 
-init_v =1.0
+init_v =0.5
 
 
 nrep = 100

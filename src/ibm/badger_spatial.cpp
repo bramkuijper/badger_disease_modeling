@@ -90,7 +90,9 @@ enum State {
 };
 
 // dispersal probability per year for females and males respectively
+double dispersal_probs_t0[2] = { 0.02,0.06 };
 double dispersal_probs[2] = { 0.02,0.06 };
+double dispersal_probs_t1[2] = { 0.5,0.9 };
 
 double init_v = 0.0;
 
@@ -116,6 +118,11 @@ void init_population()
 {
     // generate a standard individual
     Individual standard_individual(init_v);
+
+    for (int sex_i = 0; sex_i < 2; ++sex_i)
+    {
+        dispersal_probs[sex_i] = dispersal_probs_t0[sex_i];
+    }
 
     for (int column_i = 0; column_i < grid_width; ++column_i)
     {
@@ -590,6 +597,10 @@ void intragroup_transmission()
 // dispersal of individuals among patches
 void dispersal()
 {
+
+
+
+
     // auxiliary variables to store destination location
     // for migrants
     int column_destination;
@@ -1184,18 +1195,28 @@ int main(int argc, char **argv)
     // the key part of the code
     for (int generation = 0; generation < max_generations; ++generation)
     {
-        reproduce();
+        if (generation == max_generations/2)
+        {
+            for (int sex_i = 0; sex_i < 2; ++sex_i)
+            {
+                dispersal_probs[sex_i] = dispersal_probs_t1[sex_i];
+            }
+        }
 
+        reproduce();
+        
         intragroup_transmission();
         
         dispersal();
 
         mortality();
-
+        
         if (generation % skip == 0)
         {
             write_statistics(generation, DataFile);
         }
+
+
 
         if (generation % space_skip == 0)
         {
